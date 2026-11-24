@@ -34,6 +34,8 @@ hiddenimports = [
     'platformdirs',
     'tomlkit',
     'requests',
+    'version',
+    'hashlib',
     'urllib.parse',
     'json',
     'shlex',

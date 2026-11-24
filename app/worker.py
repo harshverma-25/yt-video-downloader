@@ -1,10 +1,11 @@
 import logging
 import os
 import shlex
+import shutil
 import subprocess as sp
 import sys
-
 from pathlib import Path
+
 from PySide6 import QtCore, QtWidgets
 from utils import (
     BIN_DIR,
@@ -13,8 +14,8 @@ from utils import (
     ItemRoles,
     TreeColumn,
     get_bin_dirs,
-    get_ytdlp_path,
     get_ffmpeg_dir,
+    get_ytdlp_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class DownloadWorker(QtCore.QThread):
         self.command = self.build_command(config)
         self._mutex = QtCore.QMutex()
         self._stop = False
+        self.proc: sp.Popen | None = None
 
     def build_command(self, config):
         ytdlp_exe = get_ytdlp_path()
@@ -93,19 +95,47 @@ class DownloadWorker(QtCore.QThread):
         return args
 
     def stop(self):
+        """Signal worker and child process to stop."""
         with QtCore.QMutexLocker(self._mutex):
             self._stop = True
+            proc = self.proc
+        if proc is not None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
 
     def run(self):
         create_window = sp.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         output = ""
         logger.info(f"Download ({self.id}) starting with cmd: {self.command}")
 
-        # Ensure destination directory exists
+        # Ensure destination directory exists and is writable
         try:
             Path(self.path).mkdir(parents=True, exist_ok=True)
         except Exception as e:
             logger.error(f"Could not create download folder '{self.path}': {e}")
+            self.progress.emit(
+                self.item,
+                [
+                    (TreeColumn.STATUS, "ERROR"),
+                    (TreeColumn.TITLE, f"Error: Cannot access folder {self.path}"),
+                ],
+            )
+            return
+
+        # Verify yt-dlp executable exists
+        ytdlp_exe = self.command[0] if self.command else "yt-dlp"
+        if not Path(ytdlp_exe).exists() and not shutil.which(ytdlp_exe):
+            logger.error(f"Download ({self.id}) failed: yt-dlp binary '{ytdlp_exe}' not found.")
+            self.progress.emit(
+                self.item,
+                [
+                    (TreeColumn.STATUS, "ERROR"),
+                    (TreeColumn.TITLE, "Error: yt-dlp executable not found"),
+                ],
+            )
+            return
 
         env = os.environ.copy()
         bin_paths = [str(d) for d in get_bin_dirs()]
@@ -113,62 +143,105 @@ class DownloadWorker(QtCore.QThread):
 
         self.progress.emit(self.item, [(TreeColumn.STATUS, "Processing")])
 
-        with sp.Popen(
-            self.command,
-            stdout=sp.PIPE,
-            stderr=sp.STDOUT,
-            text=True,
-            universal_newlines=True,
-            creationflags=create_window,
-            env=env,
-        ) as p:
-            for line in p.stdout:
-                output += line
+        proc_started = False
+        returncode = -1
+
+        try:
+            with sp.Popen(
+                self.command,
+                stdout=sp.PIPE,
+                stderr=sp.STDOUT,
+                text=True,
+                universal_newlines=True,
+                creationflags=create_window,
+                env=env,
+            ) as p:
                 with QtCore.QMutexLocker(self._mutex):
-                    if self._stop:
-                        p.terminate()
+                    self.proc = p
+                    proc_started = True
+
+                for line in p.stdout:
+                    output += line
+                    with QtCore.QMutexLocker(self._mutex):
+                        should_stop = self._stop
+                    if should_stop:
                         try:
-                            p.wait(timeout=3)
-                        except sp.TimeoutExpired:
-                            p.kill()
+                            p.terminate()
+                            p.wait(timeout=2)
+                        except (sp.TimeoutExpired, OSError):
+                            try:
+                                p.kill()
+                            except OSError:
+                                pass
                         logger.info(f"Download ({self.id}) stopped by user.")
                         break
 
-                line = line.strip()
-                if "__SEP__" in line:
-                    parts = [i.strip() for i in line.split("__SEP__")]
-                    if len(parts) >= 6:
-                        status = parts[0]
-                        total_bytes = parts[1]
-                        percent = parts[2]
-                        speed = parts[3]
-                        eta = parts[4]
-                        title = "__SEP__".join(parts[5:])
-                        self.progress.emit(
-                            self.item,
-                            [
-                                (TreeColumn.TITLE, title),
-                                (TreeColumn.SIZE, total_bytes),
-                                (TreeColumn.PROGRESS, percent),
-                                (TreeColumn.SPEED, speed),
-                                (TreeColumn.ETA, eta),
-                                (TreeColumn.STATUS, "Downloading"),
-                            ],
-                        )
-                elif line.startswith(("[Merger]", "[ExtractAudio]", "[VideoConvertor]")):
-                    self.progress.emit(self.item, [(TreeColumn.STATUS, "Converting")])
-                elif line.startswith("WARNING:"):
-                    logger.warning(f"Download ({self.id}) {line}")
+                    line = line.strip()
+                    if "__SEP__" in line:
+                        parts = [i.strip() for i in line.split("__SEP__")]
+                        if len(parts) >= 6:
+                            status = parts[0]
+                            total_bytes = parts[1]
+                            percent = parts[2]
+                            speed = parts[3]
+                            eta = parts[4]
+                            title = "__SEP__".join(parts[5:])
+                            self.progress.emit(
+                                self.item,
+                                [
+                                    (TreeColumn.TITLE, title),
+                                    (TreeColumn.SIZE, total_bytes),
+                                    (TreeColumn.PROGRESS, percent),
+                                    (TreeColumn.SPEED, speed),
+                                    (TreeColumn.ETA, eta),
+                                    (TreeColumn.STATUS, "Downloading"),
+                                ],
+                            )
+                    elif line.startswith(("[Merger]", "[ExtractAudio]", "[VideoConvertor]")):
+                        self.progress.emit(self.item, [(TreeColumn.STATUS, "Converting")])
+                    elif line.startswith("WARNING:"):
+                        logger.warning(f"Download ({self.id}) {line}")
+
+                returncode = p.wait() if p.returncode is None else p.returncode
+
+        except (OSError, FileNotFoundError, Exception) as e:
+            logger.error(f"Download ({self.id}) failed during execution: {e}", exc_info=True)
+            self.progress.emit(
+                self.item,
+                [
+                    (TreeColumn.STATUS, "ERROR"),
+                    (TreeColumn.SPEED, "-"),
+                    (TreeColumn.ETA, "-"),
+                ],
+            )
+            return
+        finally:
+            with QtCore.QMutexLocker(self._mutex):
+                self.proc = None
 
         with QtCore.QMutexLocker(self._mutex):
             was_stopped = self._stop
 
         if was_stopped:
             logger.info(f"Download ({self.id}) cancelled.")
-            self.progress.emit(self.item, [(TreeColumn.STATUS, "Cancelled")])
-        elif p.returncode != 0:
-            logger.error(f"Download ({self.id}) returncode: {p.returncode}\n{output}")
-            self.progress.emit(self.item, [(TreeColumn.STATUS, "ERROR")])
+            self.progress.emit(
+                self.item,
+                [
+                    (TreeColumn.STATUS, "Cancelled"),
+                    (TreeColumn.SPEED, "-"),
+                    (TreeColumn.ETA, "-"),
+                ],
+            )
+        elif returncode != 0:
+            logger.error(f"Download ({self.id}) returncode: {returncode}\n{output}")
+            self.progress.emit(
+                self.item,
+                [
+                    (TreeColumn.STATUS, "ERROR"),
+                    (TreeColumn.SPEED, "-"),
+                    (TreeColumn.ETA, "-"),
+                ],
+            )
         else:
             logger.info(f"Download ({self.id}) finished.")
             self.progress.emit(
@@ -176,5 +249,7 @@ class DownloadWorker(QtCore.QThread):
                 [
                     (TreeColumn.PROGRESS, "100%"),
                     (TreeColumn.STATUS, "Finished"),
+                    (TreeColumn.SPEED, "-"),
+                    (TreeColumn.ETA, "-"),
                 ],
             )

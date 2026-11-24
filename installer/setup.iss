@@ -1,6 +1,8 @@
 ; Script generated for YT Video Downloader Inno Setup Installer
 #define MyAppName "YT Video Downloader"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "Harsh Verma"
 #define MyAppURL "https://github.com/harshverma-25/yt-video-downloader"
 #define MyAppExeName "YT-Video-Downloader.exe"

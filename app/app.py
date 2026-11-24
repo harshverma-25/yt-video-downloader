@@ -19,6 +19,7 @@ from utils import (
     ItemRoles,
     TreeColumn,
     QUALITY_OPTIONS,
+    check_dependencies_present,
     get_bin_dir,
     get_config_path,
     get_default_download_dir,
@@ -27,9 +28,10 @@ from utils import (
     load_toml,
     save_toml,
 )
+from version import get_version
 from worker import DownloadWorker
 
-__version__ = "v1.0.0"
+__version__ = get_version()
 
 LOG_PATH = get_log_path()
 LOG_DIR = LOG_PATH.parent
@@ -80,7 +82,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pb_download.setEnabled(False)
         self.show()
 
-        self.dep_worker = DepWorker(self.config["general"]["update_ytdlp"])
+        self.dep_worker = DepWorker(
+            self.config["general"]["update_ytdlp"],
+            active_downloads_callback=lambda: len(self.active_workers) > 0,
+        )
         self.dep_worker.finished.connect(self.on_dep_finished)
         self.dep_worker.progress.connect(self.on_dep_progress)
         self.dep_worker.start()
@@ -361,12 +366,27 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def on_dep_finished(self):
         self.dep_worker.deleteLater()
-        self.pb_download.setEnabled(True)
-        if hasattr(self, "badge_status"):
-            self.badge_status.setText("🟢 Ready")
-            self.badge_status.setStyleSheet(
-                "background-color: #141824; border: 1px solid #10b981; border-radius: 12px; "
-                "padding: 5px 14px; color: #34d399; font-weight: 600; font-size: 11px;"
+        all_ready, missing = check_dependencies_present()
+        if all_ready:
+            self.pb_download.setEnabled(True)
+            if hasattr(self, "badge_status"):
+                self.badge_status.setText("🟢 Ready")
+                self.badge_status.setStyleSheet(
+                    "background-color: #141824; border: 1px solid #10b981; border-radius: 12px; "
+                    "padding: 5px 14px; color: #34d399; font-weight: 600; font-size: 11px;"
+                )
+        else:
+            missing_str = ", ".join(missing)
+            logger.warning(f"Missing dependencies after check: {missing_str}")
+            if hasattr(self, "badge_status"):
+                self.badge_status.setText(f"⚠️ Missing: {missing_str}")
+                self.badge_status.setStyleSheet(
+                    "background-color: #141824; border: 1px solid #f59e0b; border-radius: 12px; "
+                    "padding: 5px 14px; color: #fbbf24; font-weight: 600; font-size: 11px;"
+                )
+            self.statusBar.showMessage(
+                f"Missing required dependencies: {missing_str}. Connect to internet to download.",
+                10000,
             )
 
     def open_folder(self, path):
@@ -381,7 +401,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         QtWidgets.QMessageBox.about(
             self,
             "About YT Video Downloader",
-            f'<a href="https://github.com/harshverma-25/yt-video-downloader">YT Video Downloader</a> {__version__}<br><br>'
+            f'<a href="https://github.com/harshverma-25/yt-video-downloader">YT Video Downloader</a> v{__version__}<br><br>'
             "A desktop application for downloading videos and audio using yt-dlp.",
         )
 
@@ -495,6 +515,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.pending_queue.remove(item_id)
 
         if worker := self.active_workers.pop(item_id, None):
+            try:
+                worker.progress.disconnect()
+            except (RuntimeError, TypeError):
+                pass
             worker.stop()
             self._process_download_queue()
 

@@ -30,43 +30,62 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Determine Application Version
+        id: version_info
+        shell: powershell
+        run: |
+          $raw_tag = "${{ github.ref_name }}"
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+              $ver = $raw_tag.TrimStart('v')
+          } else {
+              $ver = (python -c "import sys; sys.path.insert(0, 'app'); from version import __version__; print(__version__)").Trim()
+          }
+          Write-Host "Determined application version: $ver"
+          "APP_VER=$ver" >> $env:GITHUB_OUTPUT
+          "APP_VERSION=$ver" >> $env:GITHUB_ENV
+
       - name: Install Inno Setup
         run: |
           choco install innosetup --no-progress
 
       - name: Build Executable with PyInstaller
+        shell: powershell
         run: |
           pyinstaller YT-Video-Downloader.spec --noconfirm --clean
 
       - name: Package Portable ZIP
         shell: powershell
         run: |
-          # Add portable indicator and portable readme to the dist bundle
+          # Add portable marker and documentation into the distribution bundle
           New-Item -ItemType File -Path "dist\YT-Video-Downloader\portable.txt" -Force
           Copy-Item -Path "README-PORTABLE.txt" -Destination "dist\YT-Video-Downloader\" -Force
           
-          # Compress folder into portable zip
+          # Compress into portable zip archive
           Compress-Archive -Path "dist\YT-Video-Downloader" -DestinationPath "dist\YT-Video-Downloader-Portable.zip" -Force
           
-          # Remove portable indicator from onedir folder before building the standard installer
+          # Remove portable marker before compiling the Windows Installer
           Remove-Item -Path "dist\YT-Video-Downloader\portable.txt" -Force
 
       - name: Build Windows Installer with Inno Setup
         shell: powershell
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
+          $app_ver = "${{ steps.version_info.outputs.APP_VER }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$app_ver" installer\setup.iss
 
       - name: Verify Generated Binaries
         shell: powershell
         run: |
-          Get-Item dist\installer\YT-Video-Downloader-Setup.exe
-          Get-Item dist\YT-Video-Downloader-Portable.zip
+          $installer = Get-Item "dist\installer\YT-Video-Downloader-Setup.exe" -ErrorAction Stop
+          $portable = Get-Item "dist\YT-Video-Downloader-Portable.zip" -ErrorAction Stop
+          Write-Host "Installer verified: $($installer.FullName) ($([math]::Round($installer.Length / 1MB, 2)) MB)"
+          Write-Host "Portable ZIP verified: $($portable.FullName) ($([math]::Round($portable.Length / 1MB, 2)) MB)"
 
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: YT-Video-Downloader-Setup
           path: dist/installer/YT-Video-Downloader-Setup.exe
+          if-no-files-found: error
           retention-days: 14
 
       - name: Upload Portable ZIP Artifact
@@ -74,12 +93,14 @@ jobs:
         with:
           name: YT-Video-Downloader-Portable
           path: dist/YT-Video-Downloader-Portable.zip
+          if-no-files-found: error
           retention-days: 14
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: YT Video Downloader v${{ steps.version_info.outputs.APP_VER }}
           files: |
             dist/installer/YT-Video-Downloader-Setup.exe
             dist/YT-Video-Downloader-Portable.zip

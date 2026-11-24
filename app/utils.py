@@ -179,6 +179,25 @@ def get_ffmpeg_dir(app_dir: Path | None = None) -> Path | None:
     return None
 
 
+def check_dependencies_present(app_dir: Path | None = None) -> tuple[bool, list[str]]:
+    """Verify whether all required dependencies (ffmpeg, ffprobe, yt-dlp, deno) are present."""
+    target_app_dir = app_dir if app_dir is not None else get_app_dir()
+    required = ["yt-dlp", "ffmpeg", "ffprobe", "deno"]
+    bin_dirs = get_bin_dirs(target_app_dir)
+    missing = []
+    system_os = platform.system()
+    for exe in required:
+        exe_ext = f"{exe}.exe" if system_os == "Windows" else exe
+        found = any((d / exe_ext).exists() for d in bin_dirs)
+        if not found and not is_portable_mode(target_app_dir):
+            which_p = shutil.which(exe)
+            if which_p and not is_appdata_path(which_p):
+                found = True
+        if not found:
+            missing.append(exe)
+    return len(missing) == 0, missing
+
+
 def get_default_download_dir() -> str:
     """Return the user's standard Downloads directory."""
     downloads = Path.home() / "Downloads"

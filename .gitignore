@@ -131,6 +131,7 @@ dmypy.json
 .idea/
 bin/
 
-# Local run logs
+# Local run logs and tests
 debug.log
 *.log
+tests/

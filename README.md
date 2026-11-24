@@ -152,18 +152,6 @@ The resulting standalone application will be located in the `app/dist/yt-video-d
 
 ---
 
-## Running Tests
-
-Execute the automated test suite with Python's built-in `unittest` runner:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-All 16 unit and integration tests cover URL sanitization, playlist parsing, duration formatting, path resolution, configuration loading, and yt-dlp argument generation.
-
----
-
 ## Project Structure
 
 ```
@@ -185,11 +173,6 @@ yt-video-downloader/
 │   ├── style.py               # Modern dark theme stylesheet
 │   ├── utils.py               # Path definitions, enums, helper functions
 │   └── worker.py              # Asynchronous multi-fragment download worker
-├── tests/                     # Automated unit and integration test suite
-│   ├── test_config.py         # Configuration file handling and defaults tests
-│   ├── test_playlist.py       # URL sanitation and duration formatting tests
-│   ├── test_utils.py          # Binary discovery and path tests
-│   └── test_worker.py         # yt-dlp argument builder and speed tests
 ├── LICENSE                    # The Unlicense
 ├── README.md                  # Project documentation
 └── requirements.txt           # Python package dependencies

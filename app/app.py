@@ -291,7 +291,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 "Application Message",
                 "Please select a 'Save to' folder before fetching playlist.",
             )
-        self._handle_playlist_link(url, preset, quality, path)
+        self._handle_playlist_link(url, preset, quality, path, from_playlist_tab=True)
 
     def open_menu(self, position):
         menu = QtWidgets.QMenu(self)
@@ -399,10 +399,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._update_queue_count()
 
     def _handle_playlist_link(
-        self, link: str, preset: str, quality: str, path: str
+        self, link: str, preset: str, quality: str, path: str, from_playlist_tab: bool = False
     ):
-        # Prompt if it's a single video watch link that also has &list=
-        if "watch?" in link and "list=" in link:
+        # Prompt if it's a single video watch link that also has &list= (only when not explicitly on playlist tab)
+        if not from_playlist_tab and "watch?" in link and "list=" in link:
             msg_box = QtWidgets.QMessageBox(self)
             msg_box.setWindowTitle("Playlist Detected")
             msg_box.setIcon(QtWidgets.QMessageBox.Icon.Question)
@@ -474,6 +474,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         if res != QtWidgets.QDialog.DialogCode.Accepted:
             worker.cancel()
+            worker.wait(2000)
             if "error" in fetch_result:
                 return QtWidgets.QMessageBox.warning(
                     self,
@@ -482,6 +483,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 )
             return
 
+        worker.wait(1000)
         data = fetch_result.get("data")
         if not data or not data.get("entries"):
             return QtWidgets.QMessageBox.information(

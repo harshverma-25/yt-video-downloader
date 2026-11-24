@@ -19,6 +19,7 @@ from utils import (
     ItemRoles,
     TreeColumn,
     QUALITY_OPTIONS,
+    get_bin_dir,
     get_config_path,
     get_default_download_dir,
     get_log_path,
@@ -341,7 +342,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.dd_preset.currentTextChanged.connect(self.on_preset_changed)
 
         # menu bar
-        self.action_open_bin_folder.triggered.connect(lambda: self.open_folder(BIN_DIR))
+        self.action_open_bin_folder.triggered.connect(lambda: self.open_folder(get_bin_dir()))
         self.action_open_log_folder.triggered.connect(lambda: self.open_folder(LOG_DIR))
         self.action_exit.triggered.connect(self.close)
         self.action_about.triggered.connect(self.show_about)

@@ -14,27 +14,32 @@ ROOT = Path(__file__).parent
 def get_app_dir() -> Path:
     """Return root directory of the application executable or source."""
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).parent.parent
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
 
 
 def get_bundle_dir() -> Path:
     """Return directory containing bundled read-only resources."""
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS)
-    return Path(__file__).parent
+    return Path(__file__).resolve().parent
 
 
-def is_portable_mode() -> bool:
-    """Return True if running in portable mode."""
-    app_dir = get_app_dir()
-    return (app_dir / "portable.txt").exists() or (app_dir / "data").exists()
+def is_portable_mode(app_dir: Path | None = None) -> bool:
+    """Return True only when an explicit portable marker (portable.txt) exists."""
+    target_dir = app_dir if app_dir is not None else get_app_dir()
+    try:
+        marker = target_dir / "portable.txt"
+        return marker.is_file()
+    except Exception:
+        return False
 
 
-def get_data_dir() -> Path:
+def get_data_dir(app_dir: Path | None = None) -> Path:
     """Return writable data directory (local appdata or portable data folder)."""
-    if is_portable_mode():
-        data_dir = get_app_dir() / "data"
+    target_dir = app_dir if app_dir is not None else get_app_dir()
+    if is_portable_mode(target_dir):
+        data_dir = target_dir / "data"
     else:
         data_dir = Path(user_data_dir("yt-video-downloader", appauthor=False))
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -55,10 +60,10 @@ def get_resource_path(relative_path: str) -> Path:
 
     # 2. Check executable directory (onedir dist)
     if getattr(sys, "frozen", False):
-        p_exe = Path(sys.executable).parent / relative_path
+        p_exe = Path(sys.executable).resolve().parent / relative_path
         if p_exe.exists():
             return p_exe
-        p_app_exe = Path(sys.executable).parent / "app" / relative_path
+        p_app_exe = Path(sys.executable).resolve().parent / "app" / relative_path
         if p_app_exe.exists():
             return p_app_exe
 
@@ -72,29 +77,39 @@ def get_resource_path(relative_path: str) -> Path:
     return p_root
 
 
-def get_config_path() -> Path:
+def get_config_path(app_dir: Path | None = None) -> Path:
     """Return path to user's writable configuration file."""
-    return get_data_dir() / "config.toml"
+    return get_data_dir(app_dir) / "config.toml"
 
 
-def get_log_path() -> Path:
+def get_log_path(app_dir: Path | None = None) -> Path:
     """Return path to user's writable debug log file."""
-    return get_data_dir() / "debug.log"
+    return get_data_dir(app_dir) / "debug.log"
+
+
+def get_bin_dir(app_dir: Path | None = None) -> Path:
+    """Return primary binary directory for dependencies."""
+    bin_dir = get_data_dir(app_dir) / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    return bin_dir
 
 
 # Data directory and binary directory definitions
 DATA_DIR = get_data_dir()
-BIN_DIR = get_data_dir() / "bin"
-BIN_DIR.mkdir(parents=True, exist_ok=True)
+BIN_DIR = get_bin_dir()
 LEGACY_BIN_DIR = Path(user_data_dir("yt-dlp-gui"))  # legacy data dir compatibility
 
 
-def get_bin_dirs() -> list[Path]:
+def get_bin_dirs(app_dir: Path | None = None) -> list[Path]:
     """Return all directories where binaries might be located."""
+    primary_bin = get_bin_dir(app_dir)
+    primary_data = get_data_dir(app_dir)
+    appdata_dir = Path(user_data_dir("yt-video-downloader", appauthor=False))
     dirs = [
-        BIN_DIR,
-        DATA_DIR,
-        Path(user_data_dir("yt-video-downloader", appauthor=False)),
+        primary_bin,
+        primary_data,
+        appdata_dir / "bin",
+        appdata_dir,
         LEGACY_BIN_DIR,
         ROOT / "bin",
     ]

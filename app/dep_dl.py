@@ -11,7 +11,7 @@ import logging
 import requests
 from PySide6.QtCore import QThread, Signal
 
-from utils import ROOT, BIN_DIR, LEGACY_BIN_DIR, get_ytdlp_path, get_bin_dirs
+from utils import ROOT, BIN_DIR, LEGACY_BIN_DIR, get_ytdlp_path, get_bin_dirs, get_bin_dir
 import subprocess as sp
 
 logger = logging.getLogger(__name__)
@@ -59,17 +59,18 @@ class DepWorker(QThread):
             return
 
         required_binaries = ["ffmpeg", "ffprobe", "yt-dlp", "deno"]
+        bin_dir = get_bin_dir()
         missing_exes = []
         for exe in required_binaries:
             exe_ext = f"{exe}.exe" if system_os == "Windows" else exe
-            if (BIN_DIR / exe_ext).exists():
+            if (bin_dir / exe_ext).exists():
                 continue
             # Seamless migration if present in legacy data dir
             if (LEGACY_BIN_DIR / exe_ext).exists():
                 try:
-                    BIN_DIR.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(LEGACY_BIN_DIR / exe_ext, BIN_DIR / exe_ext)
-                    logger.info(f"Migrated legacy binary {exe} to {BIN_DIR}")
+                    bin_dir.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(LEGACY_BIN_DIR / exe_ext, bin_dir / exe_ext)
+                    logger.info(f"Migrated legacy binary {exe} to {bin_dir}")
                     continue
                 except Exception as e:
                     logger.warning(f"Could not copy legacy binary {exe}: {e}")
@@ -82,7 +83,7 @@ class DepWorker(QThread):
         if not missing_exes:
             return
 
-        BIN_DIR.mkdir(parents=True, exist_ok=True)
+        bin_dir.mkdir(parents=True, exist_ok=True)
 
         for exe in missing_exes:
             binary_name = BINARIES[system_os][exe]
@@ -95,7 +96,7 @@ class DepWorker(QThread):
                 url = FFMPEG_BASE_URL + binary_name
 
             target_name = f"{exe}.exe" if system_os == "Windows" else exe
-            target_path = str(BIN_DIR / target_name)
+            target_path = str(bin_dir / target_name)
 
             self.missing.append((url, target_path))
 

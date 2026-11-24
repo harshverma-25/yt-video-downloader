@@ -8,6 +8,27 @@ YT Video Downloader is a desktop application that provides a graphical interface
 
 ---
 
+## Download & Installation (Windows)
+
+No Python or developer tools required! Pre-built Windows binaries are available for every release:
+
+### 1. Windows Installer (`YT-Video-Downloader-Setup.exe`)
+- **Recommended for most users.**
+- Provides a clean installation wizard.
+- Creates Start Menu and Desktop shortcuts.
+- Stores user settings in `%LOCALAPPDATA%\yt-video-downloader`.
+- Includes a clean Windows uninstaller (Add or Remove Programs).
+- **Download**: Grab `YT-Video-Downloader-Setup.exe` from [GitHub Releases](https://github.com/harshverma-25/yt-video-downloader/releases).
+
+### 2. Portable Version (`YT-Video-Downloader-Portable.zip`)
+- **Zero installation required.**
+- Ideal for USB flash drives or isolated directories.
+- Keeps all configurations, logs, and downloaded dependency binaries in a local `data/` subfolder alongside the executable.
+- Leaves zero traces in the Windows registry or user directories.
+- **Download**: Grab `YT-Video-Downloader-Portable.zip` from [GitHub Releases](https://github.com/harshverma-25/yt-video-downloader/releases), extract anywhere, and launch `YT-Video-Downloader.exe`.
+
+---
+
 ## Features
 
 - **Intuitive Graphical Interface**: Clean, modern dark theme built with PySide6 (Qt) designed for ease of use.
@@ -139,16 +160,41 @@ pip install -r requirements.txt
 
 ---
 
-## Building an Executable
+## Packaging & Building
 
-To create a standalone portable executable on Windows using PyInstaller:
+### Prerequisites for Building
+- Python 3.9+ with `requirements.txt` and `pyinstaller` installed (`pip install pyinstaller`)
+- [Inno Setup 6](https://jrsoftware.org/isdl.php) (for building the installer)
+
+### 1. Build Standalone Folder with PyInstaller
+Run the build using the provided specification file:
 
 ```bash
-cd app
-pyinstaller --name=yt-video-downloader --clean -y app.py --icon ./assets/yt-video-downloader.ico --add-data "config.toml;." --add-data "assets;assets" --noconsole
+pyinstaller YT-Video-Downloader.spec --noconfirm --clean
 ```
 
-The resulting standalone application will be located in the `app/dist/yt-video-downloader/` directory.
+The output will be placed in `dist/YT-Video-Downloader/` containing `YT-Video-Downloader.exe` and all bundled runtime libraries.
+
+### 2. Create Portable ZIP
+To prepare the portable distribution:
+```powershell
+# Create portable indicator and copy documentation
+New-Item -ItemType File -Path "dist\YT-Video-Downloader\portable.txt" -Force
+Copy-Item -Path "README-PORTABLE.txt" -Destination "dist\YT-Video-Downloader\" -Force
+
+# Create ZIP archive
+Compress-Archive -Path "dist\YT-Video-Downloader" -DestinationPath "dist\YT-Video-Downloader-Portable.zip" -Force
+```
+
+### 3. Build Windows Installer (`.exe`) with Inno Setup
+Compile the Inno Setup script:
+
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
+```
+*(Or invoke via the Inno Setup GUI compiler)*
+
+The setup executable will be generated at `dist/installer/YT-Video-Downloader-Setup.exe`.
 
 ---
 

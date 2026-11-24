@@ -11,14 +11,13 @@ import logging
 import requests
 from PySide6.QtCore import QThread, Signal
 
-from utils import ROOT, BIN_DIR, LEGACY_BIN_DIR, get_ytdlp_path
+from utils import ROOT, BIN_DIR, LEGACY_BIN_DIR, get_ytdlp_path, get_bin_dirs
 import subprocess as sp
 
 logger = logging.getLogger(__name__)
 
-os.environ["PATH"] += os.pathsep + str(BIN_DIR)
-os.environ["PATH"] += os.pathsep + str(LEGACY_BIN_DIR)
-os.environ["PATH"] += os.pathsep + str(ROOT / "bin")  # old version compatibility
+for d in get_bin_dirs():
+    os.environ["PATH"] += os.pathsep + str(d)
 
 BINARIES = {
     "Linux": {

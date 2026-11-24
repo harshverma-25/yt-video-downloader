@@ -8,7 +8,14 @@ from urllib.parse import parse_qs, urlparse
 
 import qtawesome as qta
 from PySide6 import QtCore, QtGui, QtWidgets
-from utils import BIN_DIR, LEGACY_BIN_DIR, ROOT, QUALITY_OPTIONS, get_ytdlp_path
+from utils import (
+    BIN_DIR,
+    LEGACY_BIN_DIR,
+    ROOT,
+    QUALITY_OPTIONS,
+    get_bin_dirs,
+    get_ytdlp_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,15 +116,8 @@ class PlaylistFetchWorker(QtCore.QThread):
             ]
             logger.info(f"Fetching playlist info: {cmd}")
             env = os.environ.copy()
-            env["PATH"] = (
-                str(BIN_DIR)
-                + os.pathsep
-                + str(LEGACY_BIN_DIR)
-                + os.pathsep
-                + str(ROOT / "bin")
-                + os.pathsep
-                + env.get("PATH", "")
-            )
+            bin_paths = [str(d) for d in get_bin_dirs()]
+            env["PATH"] = os.pathsep.join(bin_paths) + os.pathsep + env.get("PATH", "")
             self._process = sp.Popen(
                 cmd,
                 stdout=sp.PIPE,

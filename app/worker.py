@@ -12,6 +12,7 @@ from utils import (
     ROOT,
     ItemRoles,
     TreeColumn,
+    get_bin_dirs,
     get_ytdlp_path,
     get_ffmpeg_dir,
 )
@@ -107,15 +108,8 @@ class DownloadWorker(QtCore.QThread):
             logger.error(f"Could not create download folder '{self.path}': {e}")
 
         env = os.environ.copy()
-        env["PATH"] = (
-            str(BIN_DIR)
-            + os.pathsep
-            + str(LEGACY_BIN_DIR)
-            + os.pathsep
-            + str(ROOT / "bin")
-            + os.pathsep
-            + env.get("PATH", "")
-        )
+        bin_paths = [str(d) for d in get_bin_dirs()]
+        env["PATH"] = os.pathsep.join(bin_paths) + os.pathsep + env.get("PATH", "")
 
         self.progress.emit(self.item, [(TreeColumn.STATUS, "Processing")])
 

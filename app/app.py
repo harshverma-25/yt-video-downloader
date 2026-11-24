@@ -19,18 +19,26 @@ from utils import (
     ItemRoles,
     TreeColumn,
     QUALITY_OPTIONS,
+    get_config_path,
     get_default_download_dir,
+    get_log_path,
+    get_resource_path,
     load_toml,
     save_toml,
 )
 from worker import DownloadWorker
 
 __version__ = "v1.0.0"
+
+LOG_PATH = get_log_path()
+LOG_DIR = LOG_PATH.parent
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(levelname)s (%(module)s:%(lineno)d) %(message)s",
     handlers=[
-        logging.FileHandler(ROOT / "debug.log", encoding="utf-8", delay=True),
+        logging.FileHandler(LOG_PATH, encoding="utf-8", delay=True),
         logging.StreamHandler(),
     ],
 )
@@ -42,10 +50,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         super().__init__()
         self.setupUi(self)
         self.setStyleSheet(MODERN_STYLE)
-        icon_path = ROOT / "assets" / "yt-video-downloader.ico"
+        icon_path = get_resource_path("assets/yt-video-downloader.ico")
         if not icon_path.exists():
-            icon_path = ROOT / "assets" / "yt-dlp-gui.ico"
-        self.setWindowIcon(QtGui.QIcon(str(icon_path)))
+            icon_path = get_resource_path("assets/yt-dlp-gui.ico")
+        if icon_path.exists():
+            self.setWindowIcon(QtGui.QIcon(str(icon_path)))
         self.resize(920, 680)
         self.setMinimumSize(800, 560)
 
@@ -333,7 +342,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # menu bar
         self.action_open_bin_folder.triggered.connect(lambda: self.open_folder(BIN_DIR))
-        self.action_open_log_folder.triggered.connect(lambda: self.open_folder(ROOT))
+        self.action_open_log_folder.triggered.connect(lambda: self.open_folder(LOG_DIR))
         self.action_exit.triggered.connect(self.close)
         self.action_about.triggered.connect(self.show_about)
         self.action_clear_url_list.triggered.connect(self.te_link.clear)
@@ -786,7 +795,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.lb_footer_status.setText("✓ All downloads completed!")
 
     def load_config(self):
-        config_path = ROOT / "config.toml"
+        config_path = get_config_path()
+        template_config_path = get_resource_path("config.toml")
+
         default_config = {
             "general": {
                 "current_preset": 0,
@@ -804,8 +815,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         try:
             if not config_path.exists():
-                save_toml(config_path, default_config)
-                self.config = default_config
+                if template_config_path.exists():
+                    try:
+                        self.config = load_toml(template_config_path)
+                    except Exception:
+                        self.config = default_config
+                else:
+                    self.config = default_config
+                save_toml(config_path, self.config)
             else:
                 self.config = load_toml(config_path)
         except Exception as e:
@@ -855,7 +872,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.config["general"]["current_preset"] = self.dd_preset.currentIndex()
             self.config["general"]["current_quality"] = self.dd_quality.currentIndex()
             self.config["general"]["path"] = self.le_path.text()
-            save_toml(ROOT / "config.toml", self.config)
+            save_toml(get_config_path(), self.config)
         except Exception as e:
             logger.error(f"Error saving config on close: {e}")
 

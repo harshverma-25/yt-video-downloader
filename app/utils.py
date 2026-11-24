@@ -100,20 +100,48 @@ BIN_DIR = get_bin_dir()
 LEGACY_BIN_DIR = Path(user_data_dir("yt-dlp-gui"))  # legacy data dir compatibility
 
 
+def is_appdata_path(p: Path | str) -> bool:
+    """Check if a path is located inside any installed AppData directories."""
+    try:
+        resolved = str(Path(p).resolve()).lower()
+        appdata_dirs = [
+            str(Path(user_data_dir("yt-video-downloader", appauthor=False)).resolve()).lower(),
+            str(Path(user_data_dir("yt-video-downloader")).resolve()).lower(),
+            str(LEGACY_BIN_DIR.resolve()).lower(),
+        ]
+        return any(
+            resolved == d or resolved.startswith(d + os.sep) or resolved.startswith(d + "/")
+            for d in appdata_dirs
+        )
+    except Exception:
+        return False
+
+
 def get_bin_dirs(app_dir: Path | None = None) -> list[Path]:
-    """Return all directories where binaries might be located."""
-    primary_bin = get_bin_dir(app_dir)
-    primary_data = get_data_dir(app_dir)
-    appdata_dir = Path(user_data_dir("yt-video-downloader", appauthor=False))
-    dirs = [
-        primary_bin,
-        primary_data,
-        appdata_dir / "bin",
-        appdata_dir,
-        LEGACY_BIN_DIR,
-        ROOT / "bin",
-    ]
-    # Filter unique directories
+    """Return all directories where binaries might be located based on the execution mode."""
+    target_app_dir = app_dir if app_dir is not None else get_app_dir()
+    portable = is_portable_mode(target_app_dir)
+
+    dirs: list[Path] = []
+    if portable:
+        # Portable mode: strictly isolate to portable directories
+        portable_data = target_app_dir / "data"
+        dirs = [
+            portable_data / "bin",
+            portable_data,
+            target_app_dir / "bin",
+        ]
+    else:
+        # Installed / Development mode: use user AppData and legacy directories
+        appdata_dir = Path(user_data_dir("yt-video-downloader", appauthor=False))
+        dirs = [
+            appdata_dir / "bin",
+            appdata_dir,
+            LEGACY_BIN_DIR,
+            ROOT / "bin",
+        ]
+
+    # Filter unique directories while preserving search order
     unique_dirs = []
     for d in dirs:
         if d not in unique_dirs:
@@ -121,25 +149,31 @@ def get_bin_dirs(app_dir: Path | None = None) -> list[Path]:
     return unique_dirs
 
 
-def get_ytdlp_path() -> str:
-    """Find the yt-dlp executable across bin directories or system PATH."""
+def get_ytdlp_path(app_dir: Path | None = None) -> str:
+    """Find the yt-dlp executable across mode-specific bin directories or system PATH."""
+    target_app_dir = app_dir if app_dir is not None else get_app_dir()
     system_os = platform.system()
     exe_name = "yt-dlp.exe" if system_os == "Windows" else "yt-dlp"
-    for d in get_bin_dirs():
+    for d in get_bin_dirs(target_app_dir):
         p = d / exe_name
         if p.exists():
             return str(p)
     w = shutil.which("yt-dlp")
     if w:
-        return w
+        if is_portable_mode(target_app_dir) and is_appdata_path(w):
+            # Never allow portable mode to silently use yt-dlp from installed AppData
+            pass
+        else:
+            return w
     return "yt-dlp"
 
 
-def get_ffmpeg_dir() -> Path | None:
-    """Find directory containing ffmpeg/ffprobe executable."""
+def get_ffmpeg_dir(app_dir: Path | None = None) -> Path | None:
+    """Find directory containing ffmpeg/ffprobe executable across mode-specific directories."""
+    target_app_dir = app_dir if app_dir is not None else get_app_dir()
     system_os = platform.system()
     exe_name = "ffmpeg.exe" if system_os == "Windows" else "ffmpeg"
-    for d in get_bin_dirs():
+    for d in get_bin_dirs(target_app_dir):
         if (d / exe_name).exists():
             return d
     return None

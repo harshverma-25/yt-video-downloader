@@ -11,7 +11,16 @@ import logging
 import requests
 from PySide6.QtCore import QThread, Signal
 
-from utils import ROOT, BIN_DIR, LEGACY_BIN_DIR, get_ytdlp_path, get_bin_dirs, get_bin_dir
+from utils import (
+    ROOT,
+    BIN_DIR,
+    LEGACY_BIN_DIR,
+    get_ytdlp_path,
+    get_bin_dirs,
+    get_bin_dir,
+    is_portable_mode,
+    is_appdata_path,
+)
 import subprocess as sp
 
 logger = logging.getLogger(__name__)
@@ -60,13 +69,23 @@ class DepWorker(QThread):
 
         required_binaries = ["ffmpeg", "ffprobe", "yt-dlp", "deno"]
         bin_dir = get_bin_dir()
+        bin_dirs = get_bin_dirs()
+        portable = is_portable_mode()
         missing_exes = []
         for exe in required_binaries:
             exe_ext = f"{exe}.exe" if system_os == "Windows" else exe
-            if (bin_dir / exe_ext).exists():
+
+            # Check mode-specific directories
+            found = False
+            for d in bin_dirs:
+                if (d / exe_ext).exists():
+                    found = True
+                    break
+            if found:
                 continue
-            # Seamless migration if present in legacy data dir
-            if (LEGACY_BIN_DIR / exe_ext).exists():
+
+            # Seamless migration if present in legacy data dir (installed mode only)
+            if not portable and (LEGACY_BIN_DIR / exe_ext).exists():
                 try:
                     bin_dir.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(LEGACY_BIN_DIR / exe_ext, bin_dir / exe_ext)
@@ -74,10 +93,19 @@ class DepWorker(QThread):
                     continue
                 except Exception as e:
                     logger.warning(f"Could not copy legacy binary {exe}: {e}")
-            if (ROOT / "bin" / exe_ext).exists():
+
+            # Development/source fallback (installed mode only)
+            if not portable and (ROOT / "bin" / exe_ext).exists():
                 continue
-            if shutil.which(exe):
-                continue
+
+            # System PATH check (strictly prevent portable mode from using AppData binaries)
+            which_path = shutil.which(exe)
+            if which_path:
+                if portable and is_appdata_path(which_path):
+                    logger.debug(f"Ignoring AppData binary in portable mode: {which_path}")
+                else:
+                    continue
+
             missing_exes.append(exe)
 
         if not missing_exes:

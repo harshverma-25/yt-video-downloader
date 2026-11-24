@@ -9,6 +9,18 @@ YT Video Downloader is a modern, high-speed Windows desktop application providin
 
 ---
 
+## 🎬 Application Demo
+
+<div align="center">
+  <video src="assets/yt.mp4" controls="controls" width="100%" style="max-width: 800px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" poster="assets/preview.png">
+    Your browser does not support the video tag. Watch the demo here: <a href="assets/yt.mp4">assets/yt.mp4</a>
+  </video>
+  <p><sub><i>Watch YT Video Downloader in action: high-speed multi-fragment video downloads, audio conversion, and playlist management.</i></sub></p>
+  <p><a href="assets/yt.mp4">▶️ <b>Watch / Download Demo Video (assets/yt.mp4)</b></a></p>
+</div>
+
+---
+
 ## Download & Installation (Windows)
 
 No Python, Git, or development environment required! Pre-compiled, standalone Windows 64-bit binaries are available for every release on [GitHub Releases](https://github.com/harshverma-25/yt-video-downloader/releases).
@@ -184,6 +196,9 @@ yt-video-downloader/
 ├── .github/
 │   └── workflows/
 │       └── release.yaml       # GitHub Actions automated release workflow
+├── assets/
+│   ├── preview.png            # Application preview poster image
+│   └── yt.mp4                 # Application demonstration video
 ├── app/
 │   ├── assets/
 │   │   ├── yt-video-downloader.ico  # Application icon

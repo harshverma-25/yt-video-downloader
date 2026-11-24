@@ -46,121 +46,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if not icon_path.exists():
             icon_path = ROOT / "assets" / "yt-dlp-gui.ico"
         self.setWindowIcon(QtGui.QIcon(str(icon_path)))
-        self.resize(880, 640)
+        self.resize(920, 680)
+        self.setMinimumSize(800, 560)
 
-        # Style & configure buttons
-        self.pb_add.setText(" Add to Queue")
-        self.pb_add.setIcon(qta.icon("mdi6.plus-circle-outline", color="#ffffff"))
-        self.pb_add.setIconSize(QtCore.QSize(18, 18))
-
-        self.pb_clear.setText(" Clear List")
-        self.pb_clear.setIcon(qta.icon("mdi6.trash-can-outline", color="#f87171"))
-        self.pb_clear.setIconSize(QtCore.QSize(18, 18))
-
-        self.pb_download.setText(" Start Download")
-        self.pb_download.setIcon(qta.icon("mdi6.download", color="#ffffff"))
-        self.pb_download.setIconSize(QtCore.QSize(18, 18))
-
-        self.pb_path.setText(" Browse...")
-        self.pb_path.setIcon(qta.icon("mdi6.folder-open", color="#cbd5e1"))
-
-        # Setup Tabs for Single Videos vs YouTube Playlist
-        self.tab_widget = QtWidgets.QTabWidget()
-
-        # Tab 1: Single / Multi Video URLs
-        tab_videos = QtWidgets.QWidget()
-        tab_videos_layout = QtWidgets.QHBoxLayout(tab_videos)
-        tab_videos_layout.setContentsMargins(6, 6, 6, 6)
-        tab_videos_layout.setSpacing(10)
-
-        left_col = QtWidgets.QVBoxLayout()
-        left_col.setSpacing(6)
-        lb_single = QtWidgets.QLabel("Video URL(s):")
-        lb_single.setStyleSheet("font-weight: 600; color: #cbd5e1;")
-        left_col.addWidget(lb_single)
-
-        self.pb_paste = QtWidgets.QPushButton("Paste")
-        self.pb_paste.setIcon(qta.icon("mdi6.content-paste", color="#94a3b8"))
-        self.pb_paste.setToolTip("Paste URL from clipboard")
-        self.pb_paste.clicked.connect(self.button_paste)
-
-        self.pb_clear_url = QtWidgets.QPushButton("Clear")
-        self.pb_clear_url.setIcon(qta.icon("mdi6.close-circle-outline", color="#94a3b8"))
-        self.pb_clear_url.setToolTip("Clear URL box")
-        self.pb_clear_url.clicked.connect(self.te_link.clear)
-
-        btn_box = QtWidgets.QHBoxLayout()
-        btn_box.setSpacing(6)
-        btn_box.addWidget(self.pb_paste)
-        btn_box.addWidget(self.pb_clear_url)
-        left_col.addLayout(btn_box)
-        left_col.addStretch(1)
-        tab_videos_layout.addLayout(left_col)
-
-        self.te_link.setPlaceholderText(
-            "Paste one or more video links here (one per line)...\n\n"
-            "• Example: https://www.youtube.com/watch?v=..."
-        )
-        self.gridLayout.removeWidget(self.te_link)
-        tab_videos_layout.addWidget(self.te_link, 1)
-
-        # Tab 2: Dedicated YouTube Playlist Section
-        tab_playlist = QtWidgets.QWidget()
-        tab_playlist_layout = QtWidgets.QVBoxLayout(tab_playlist)
-        tab_playlist_layout.setContentsMargins(12, 10, 12, 10)
-        tab_playlist_layout.setSpacing(8)
-
-        pl_input_layout = QtWidgets.QHBoxLayout()
-        pl_input_layout.setSpacing(8)
-
-        lb_pl = QtWidgets.QLabel("Playlist URL:")
-        lb_pl.setStyleSheet("font-weight: 600; color: #cbd5e1;")
-        pl_input_layout.addWidget(lb_pl)
-
-        self.le_playlist = QtWidgets.QLineEdit()
-        self.le_playlist.setPlaceholderText(
-            "Paste YouTube playlist link here (e.g. https://www.youtube.com/playlist?list=...)"
-        )
-        self.le_playlist.returnPressed.connect(self.button_fetch_playlist)
-        pl_input_layout.addWidget(self.le_playlist, 1)
-
-        self.pb_paste_pl = QtWidgets.QPushButton("Paste")
-        self.pb_paste_pl.setIcon(qta.icon("mdi6.content-paste", color="#94a3b8"))
-        self.pb_paste_pl.clicked.connect(self.button_paste_playlist)
-        pl_input_layout.addWidget(self.pb_paste_pl)
-
-        self.pb_fetch_pl = QtWidgets.QPushButton(" Fetch Playlist Videos")
-        self.pb_fetch_pl.setIcon(qta.icon("mdi6.playlist-check", color="#ffffff"))
-        self.pb_fetch_pl.setStyleSheet(
-            "background-color: #4f46e5; color: #ffffff; font-weight: 600; border: 1px solid #6366f1; padding: 6px 16px;"
-        )
-        self.pb_fetch_pl.clicked.connect(self.button_fetch_playlist)
-        pl_input_layout.addWidget(self.pb_fetch_pl)
-
-        tab_playlist_layout.addLayout(pl_input_layout)
-
-        lb_tip = QtWidgets.QLabel(
-            "💡 Paste any YouTube playlist URL and click 'Fetch Playlist Videos' to preview all videos, select individual videos or all, and download them."
-        )
-        lb_tip.setStyleSheet("color: #94a3b8; font-size: 12px; margin-top: 2px;")
-        tab_playlist_layout.addWidget(lb_tip)
-        tab_playlist_layout.addStretch(1)
-
-        self.tab_widget.addTab(
-            tab_videos, qta.icon("mdi6.video-outline", color="#818cf8"), "Single Video(s)"
-        )
-        self.tab_widget.addTab(
-            tab_playlist, qta.icon("mdi6.playlist-play", color="#818cf8"), "YouTube Playlist"
-        )
-
-        # Place tab widget in row 0 of gridLayout
-        self.gridLayout.removeWidget(self.lb_link)
-        self.lb_link.setVisible(False)
-        self.gridLayout.addWidget(self.tab_widget, 0, 0, 1, 6)
+        # Build clean, modern, attractive UI layout
+        self._build_modern_ui()
 
         self.tw.setAlternatingRowColors(True)
         self.tw.setAnimated(True)
-        self.tw.setColumnWidth(TreeColumn.TITLE, 260)
+        self.tw.setColumnWidth(TreeColumn.TITLE, 280)
         self.tw.setColumnWidth(TreeColumn.PRESET, 80)
         self.tw.setColumnWidth(TreeColumn.QUALITY, 85)
         self.tw.setColumnWidth(TreeColumn.SIZE, 85)
@@ -190,6 +84,243 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tw.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.tw.customContextMenuRequested.connect(self.open_menu)
 
+    def _build_modern_ui(self):
+        """Construct a clean, unified, and modern interface layout."""
+        central = QtWidgets.QWidget(self)
+        self.setCentralWidget(central)
+        root_layout = QtWidgets.QVBoxLayout(central)
+        root_layout.setContentsMargins(18, 14, 18, 14)
+        root_layout.setSpacing(12)
+
+        # 1. Header Bar: Icon + App Title + Status Capsules
+        header_layout = QtWidgets.QHBoxLayout()
+        header_layout.setSpacing(12)
+
+        icon_label = QtWidgets.QLabel()
+        icon_pixmap = QtGui.QIcon(str(ROOT / "assets" / "yt-video-downloader.ico")).pixmap(36, 36)
+        if icon_pixmap.isNull():
+            icon_pixmap = qta.icon("mdi6.play-circle", color="#818cf8").pixmap(36, 36)
+        icon_label.setPixmap(icon_pixmap)
+        header_layout.addWidget(icon_label)
+
+        title_col = QtWidgets.QVBoxLayout()
+        title_col.setSpacing(1)
+        lb_app_title = QtWidgets.QLabel("YT Video Downloader")
+        font_title = QtGui.QFont()
+        font_title.setPointSize(14)
+        font_title.setBold(True)
+        lb_app_title.setFont(font_title)
+        lb_app_title.setStyleSheet("color: #f8fafc;")
+
+        lb_app_sub = QtWidgets.QLabel("Fast, high-quality video and audio downloader")
+        lb_app_sub.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        title_col.addWidget(lb_app_title)
+        title_col.addWidget(lb_app_sub)
+        header_layout.addLayout(title_col, 1)
+
+        self.badge_status = QtWidgets.QLabel("🟢 Ready")
+        self.badge_status.setStyleSheet(
+            "background-color: #141824; border: 1px solid #242b3d; border-radius: 12px; "
+            "padding: 5px 14px; color: #34d399; font-weight: 600; font-size: 11px;"
+        )
+        header_layout.addWidget(self.badge_status)
+
+        self.badge_queue_count = QtWidgets.QLabel("0 Items")
+        self.badge_queue_count.setStyleSheet(
+            "background-color: #141824; border: 1px solid #242b3d; border-radius: 12px; "
+            "padding: 5px 14px; color: #94a3b8; font-weight: 600; font-size: 11px;"
+        )
+        header_layout.addWidget(self.badge_queue_count)
+        root_layout.addLayout(header_layout)
+
+        # 2. Input Card (Mode Tabs + URL Input + Options Strip)
+        card_input = QtWidgets.QFrame()
+        card_input.setObjectName("card_input")
+        card_input_layout = QtWidgets.QVBoxLayout(card_input)
+        card_input_layout.setContentsMargins(14, 12, 14, 12)
+        card_input_layout.setSpacing(10)
+
+        # Tab Widget for Mode selection
+        self.tab_widget = QtWidgets.QTabWidget()
+
+        # Tab 1: Single Video(s)
+        tab_videos = QtWidgets.QWidget()
+        tab_v_layout = QtWidgets.QVBoxLayout(tab_videos)
+        tab_v_layout.setContentsMargins(0, 8, 0, 0)
+        tab_v_layout.setSpacing(6)
+
+        tab_v_top = QtWidgets.QHBoxLayout()
+        lb_paste_hint = QtWidgets.QLabel("Paste YouTube video link(s):")
+        lb_paste_hint.setStyleSheet("color: #94a3b8; font-weight: 500; font-size: 12px;")
+        tab_v_top.addWidget(lb_paste_hint)
+        tab_v_top.addStretch(1)
+
+        self.pb_paste = QtWidgets.QPushButton(" Paste")
+        self.pb_paste.setProperty("class", "btn-subtle")
+        self.pb_paste.setIcon(qta.icon("mdi6.content-paste", color="#94a3b8"))
+        self.pb_paste.setToolTip("Paste URL from clipboard")
+        self.pb_paste.clicked.connect(self.button_paste)
+        tab_v_top.addWidget(self.pb_paste)
+
+        self.pb_clear_url = QtWidgets.QPushButton(" Clear")
+        self.pb_clear_url.setProperty("class", "btn-subtle")
+        self.pb_clear_url.setIcon(qta.icon("mdi6.close-circle-outline", color="#94a3b8"))
+        self.pb_clear_url.setToolTip("Clear input box")
+        self.pb_clear_url.clicked.connect(self.te_link.clear)
+        tab_v_top.addWidget(self.pb_clear_url)
+        tab_v_layout.addLayout(tab_v_top)
+
+        self.te_link.setPlaceholderText(
+            "Paste one or more video links here (one per line)...\n"
+            "Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        )
+        self.te_link.setMinimumHeight(65)
+        self.te_link.setMaximumHeight(85)
+        tab_v_layout.addWidget(self.te_link)
+
+        # Tab 2: YouTube Playlist
+        tab_playlist = QtWidgets.QWidget()
+        tab_pl_layout = QtWidgets.QVBoxLayout(tab_playlist)
+        tab_pl_layout.setContentsMargins(0, 8, 0, 0)
+        tab_pl_layout.setSpacing(8)
+
+        pl_input_layout = QtWidgets.QHBoxLayout()
+        pl_input_layout.setSpacing(8)
+
+        self.le_playlist = QtWidgets.QLineEdit()
+        self.le_playlist.setPlaceholderText(
+            "Paste YouTube playlist URL (e.g. https://www.youtube.com/playlist?list=...)"
+        )
+        self.le_playlist.returnPressed.connect(self.button_fetch_playlist)
+        pl_input_layout.addWidget(self.le_playlist, 1)
+
+        self.pb_paste_pl = QtWidgets.QPushButton(" Paste")
+        self.pb_paste_pl.setProperty("class", "btn-subtle")
+        self.pb_paste_pl.setIcon(qta.icon("mdi6.content-paste", color="#94a3b8"))
+        self.pb_paste_pl.clicked.connect(self.button_paste_playlist)
+        pl_input_layout.addWidget(self.pb_paste_pl)
+
+        self.pb_fetch_pl = QtWidgets.QPushButton(" Fetch Playlist Videos")
+        self.pb_fetch_pl.setIcon(qta.icon("mdi6.playlist-check", color="#ffffff"))
+        self.pb_fetch_pl.setStyleSheet(
+            "background-color: #4f46e5; color: #ffffff; font-weight: 600; border: 1px solid #6366f1; padding: 7px 18px; border-radius: 8px;"
+        )
+        self.pb_fetch_pl.clicked.connect(self.button_fetch_playlist)
+        pl_input_layout.addWidget(self.pb_fetch_pl)
+        tab_pl_layout.addLayout(pl_input_layout)
+
+        lb_pl_tip = QtWidgets.QLabel(
+            "💡 Paste any YouTube playlist URL to preview track numbers, titles, and durations before downloading."
+        )
+        lb_pl_tip.setStyleSheet("color: #64748b; font-size: 11px;")
+        tab_pl_layout.addWidget(lb_pl_tip)
+
+        self.tab_widget.addTab(
+            tab_videos, qta.icon("mdi6.video-outline", color="#818cf8"), "Single Video(s)"
+        )
+        self.tab_widget.addTab(
+            tab_playlist, qta.icon("mdi6.playlist-play", color="#818cf8"), "YouTube Playlist"
+        )
+        card_input_layout.addWidget(self.tab_widget)
+
+        # Options Strip: Destination, Preset, Quality, Add button
+        opt_layout = QtWidgets.QHBoxLayout()
+        opt_layout.setSpacing(10)
+
+        lb_save = QtWidgets.QLabel("Save to:")
+        lb_save.setStyleSheet("font-weight: 600; color: #cbd5e1;")
+        opt_layout.addWidget(lb_save)
+
+        self.le_path.setMinimumWidth(180)
+        opt_layout.addWidget(self.le_path, 1)
+
+        self.pb_path.setText(" Browse...")
+        self.pb_path.setIcon(qta.icon("mdi6.folder-open", color="#cbd5e1"))
+        opt_layout.addWidget(self.pb_path)
+
+        sep = QtWidgets.QFrame()
+        sep.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        sep.setStyleSheet("color: #232b3d; max-width: 1px;")
+        opt_layout.addWidget(sep)
+
+        lb_fmt = QtWidgets.QLabel("Format:")
+        lb_fmt.setStyleSheet("font-weight: 600; color: #cbd5e1;")
+        opt_layout.addWidget(lb_fmt)
+
+        self.dd_preset.setMinimumWidth(100)
+        opt_layout.addWidget(self.dd_preset)
+
+        lb_qual = QtWidgets.QLabel("Quality:")
+        lb_qual.setStyleSheet("font-weight: 600; color: #cbd5e1;")
+        opt_layout.addWidget(lb_qual)
+
+        self.dd_quality.setMinimumWidth(120)
+        opt_layout.addWidget(self.dd_quality)
+
+        self.pb_add.setText(" Add to Queue")
+        self.pb_add.setIcon(qta.icon("mdi6.plus-circle", color="#ffffff"))
+        self.pb_add.setIconSize(QtCore.QSize(18, 18))
+        self.pb_add.setStyleSheet(
+            "background-color: #059669; color: #ffffff; font-weight: 600; border: 1px solid #10b981; padding: 7px 20px; border-radius: 8px;"
+        )
+        opt_layout.addWidget(self.pb_add)
+
+        card_input_layout.addLayout(opt_layout)
+        root_layout.addWidget(card_input)
+
+        # 3. Card 2: Downloads Queue Card
+        card_queue = QtWidgets.QFrame()
+        card_queue.setObjectName("card_queue")
+        card_queue_layout = QtWidgets.QVBoxLayout(card_queue)
+        card_queue_layout.setContentsMargins(12, 12, 12, 12)
+        card_queue_layout.setSpacing(8)
+
+        queue_top = QtWidgets.QHBoxLayout()
+        lb_q_title = QtWidgets.QLabel("Downloads Queue")
+        font_q = QtGui.QFont()
+        font_q.setBold(True)
+        font_q.setPointSize(10)
+        lb_q_title.setFont(font_q)
+        lb_q_title.setStyleSheet("color: #cbd5e1;")
+        queue_top.addWidget(lb_q_title)
+
+        self.lb_queue_sub = QtWidgets.QLabel("(0 items in queue)")
+        self.lb_queue_sub.setStyleSheet("color: #64748b; font-size: 12px;")
+        queue_top.addWidget(self.lb_queue_sub)
+        queue_top.addStretch(1)
+
+        lb_q_hint = QtWidgets.QLabel("💡 Right-click item to copy link, open folder, or remove")
+        lb_q_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        queue_top.addWidget(lb_q_hint)
+        card_queue_layout.addLayout(queue_top)
+
+        card_queue_layout.addWidget(self.tw, 1)
+        root_layout.addWidget(card_queue, 1)
+
+        # 4. Footer Action Bar
+        footer_layout = QtWidgets.QHBoxLayout()
+        footer_layout.setSpacing(12)
+
+        self.lb_footer_status = QtWidgets.QLabel("Ready")
+        self.lb_footer_status.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        footer_layout.addWidget(self.lb_footer_status)
+        footer_layout.addStretch(1)
+
+        self.pb_clear.setText(" Clear List")
+        self.pb_clear.setIcon(qta.icon("mdi6.trash-can-outline", color="#f87171"))
+        self.pb_clear.setIconSize(QtCore.QSize(18, 18))
+        footer_layout.addWidget(self.pb_clear)
+
+        self.pb_download.setText(" Start Download")
+        self.pb_download.setIcon(qta.icon("mdi6.download", color="#ffffff"))
+        self.pb_download.setIconSize(QtCore.QSize(18, 18))
+        self.pb_download.setStyleSheet(
+            "background-color: #4f46e5; color: #ffffff; font-weight: 700; border: 1px solid #6366f1; padding: 8px 26px; border-radius: 8px; font-size: 13px;"
+        )
+        footer_layout.addWidget(self.pb_download)
+
+        root_layout.addLayout(footer_layout)
+
     def connect_ui(self):
         # buttons
         self.pb_path.clicked.connect(self.button_path)
@@ -215,10 +346,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def on_dep_progress(self, status):
         self.statusBar.showMessage(status, 10000)
+        if hasattr(self, "badge_status"):
+            self.badge_status.setText(f"⚡ {status}")
 
     def on_dep_finished(self):
         self.dep_worker.deleteLater()
         self.pb_download.setEnabled(True)
+        if hasattr(self, "badge_status"):
+            self.badge_status.setText("🟢 Ready")
+            self.badge_status.setStyleSheet(
+                "background-color: #141824; border: 1px solid #10b981; border-radius: 12px; "
+                "padding: 5px 14px; color: #34d399; font-weight: 600; font-size: 11px;"
+            )
 
     def open_folder(self, path):
         try:
@@ -368,9 +507,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _update_queue_count(self):
         count = self.tw.topLevelItemCount()
-        self.gb_downloads.setTitle(
-            f"Downloads Queue ({count} item{'s' if count != 1 else ''})"
-        )
+        if hasattr(self, "badge_queue_count"):
+            self.badge_queue_count.setText(f"{count} Item{'s' if count != 1 else ''}")
+        if hasattr(self, "lb_queue_sub"):
+            self.lb_queue_sub.setText(f"({count} item{'s' if count != 1 else ''} in queue)")
+        if hasattr(self, "gb_downloads"):
+            self.gb_downloads.setTitle(
+                f"Downloads Queue ({count} item{'s' if count != 1 else ''})"
+            )
 
     def _add_queue_item(
         self, link: str, preset: str, quality: str, path: str, title: str = None
@@ -623,11 +767,23 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             worker.progress.connect(self.on_dl_progress)
             worker.start()
 
+        if hasattr(self, "lb_footer_status"):
+            active_count = len(self.active_workers)
+            queue_count = len(self.pending_queue)
+            if active_count > 0:
+                self.lb_footer_status.setText(f"⚡ Downloading: {active_count} active • {queue_count} pending")
+            elif queue_count > 0:
+                self.lb_footer_status.setText(f"Queued: {queue_count} item{'s' if queue_count != 1 else ''}")
+            else:
+                self.lb_footer_status.setText("Ready")
+
     def _on_worker_finished(self, idx):
         self.active_workers.pop(idx, None)
         self._process_download_queue()
         if not self.active_workers and not self.pending_queue:
             self.statusBar.showMessage("All downloads completed!", 8000)
+            if hasattr(self, "lb_footer_status"):
+                self.lb_footer_status.setText("✓ All downloads completed!")
 
     def load_config(self):
         config_path = ROOT / "config.toml"

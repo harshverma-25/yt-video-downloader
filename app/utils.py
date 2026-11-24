@@ -11,7 +11,13 @@ BIN_DIR = Path(user_data_dir("yt-video-downloader"))  # user data dir for persis
 LEGACY_BIN_DIR = Path(user_data_dir("yt-dlp-gui"))  # legacy data dir compatibility
 
 
+def get_bin_dirs() -> list[Path]:
+    """Return all directories where binaries might be located."""
+    return [BIN_DIR, LEGACY_BIN_DIR, ROOT / "bin"]
+
+
 def get_ytdlp_path() -> str:
+    """Find the yt-dlp executable across bin directories or system PATH."""
     system_os = platform.system()
     exe_name = "yt-dlp.exe" if system_os == "Windows" else "yt-dlp"
     for p in [
@@ -25,6 +31,24 @@ def get_ytdlp_path() -> str:
     if w:
         return w
     return "yt-dlp"
+
+
+def get_ffmpeg_dir() -> Path | None:
+    """Find directory containing ffmpeg/ffprobe executable."""
+    system_os = platform.system()
+    exe_name = "ffmpeg.exe" if system_os == "Windows" else "ffmpeg"
+    for d in [BIN_DIR, LEGACY_BIN_DIR, ROOT / "bin"]:
+        if (d / exe_name).exists():
+            return d
+    return None
+
+
+def get_default_download_dir() -> str:
+    """Return the user's standard Downloads directory."""
+    downloads = Path.home() / "Downloads"
+    if downloads.exists():
+        return str(downloads)
+    return str(Path.home())
 
 
 def load_toml(path):

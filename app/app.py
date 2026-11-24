@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 
 import qtawesome as qta
 from dep_dl import DepWorker
@@ -18,12 +19,13 @@ from utils import (
     ItemRoles,
     TreeColumn,
     QUALITY_OPTIONS,
+    get_default_download_dir,
     load_toml,
     save_toml,
 )
 from worker import DownloadWorker
 
-__version__ = ""
+__version__ = "v1.0.0"
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(levelname)s (%(module)s:%(lineno)d) %(message)s",
@@ -180,7 +182,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.dep_worker.start()
 
         self.to_dl = {}
-        self.workers = {}
+        self.pending_queue = []
+        self.active_workers = {}
+        self.MAX_CONCURRENT_DOWNLOADS = 3
         self.index = 0
 
         self.tw.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
@@ -217,7 +221,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pb_download.setEnabled(True)
 
     def open_folder(self, path):
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+        try:
+            path_obj = Path(path)
+            path_obj.mkdir(parents=True, exist_ok=True)
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(path_obj)))
+        except Exception as e:
+            logger.error(f"Error opening folder {path}: {e}")
 
     def show_about(self):
         QtWidgets.QMessageBox.about(
@@ -333,11 +342,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         logger.debug(f"Removing download ({item_id}): {item_text}")
 
-        if worker := self.workers.get(item_id):
+        if item_id in self.pending_queue:
+            self.pending_queue.remove(item_id)
+
+        if worker := self.active_workers.pop(item_id, None):
             worker.stop()
+            self._process_download_queue()
 
         self.to_dl.pop(item_id, None)
-        self.tw.takeTopLevelItem(self.tw.indexOfTopLevelItem(item))
+        index = self.tw.indexOfTopLevelItem(item)
+        if index != -1:
+            self.tw.takeTopLevelItem(index)
         self._update_queue_count()
 
     def button_path(self):
@@ -539,70 +554,121 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.te_link.clear()
 
-        lines = [l.strip() for l in links.splitlines() if l.strip()]
+        lines = [clean_and_extract_url(l) for l in links.splitlines() if l.strip()]
         for link in lines:
+            if not link:
+                continue
             if is_playlist_url(link):
                 self._handle_playlist_link(link, preset, quality, path)
             else:
                 self._add_queue_item(link, preset, quality, path)
 
     def button_clear(self):
-        if self.workers:
+        active_running = [w for w in self.active_workers.values() if w.isRunning()]
+        if active_running:
             return QtWidgets.QMessageBox.critical(
                 self,
                 "Application Message",
-                "Unable to clear list because there are active downloads in progress.\n"
-                "Remove a download by right clicking on it and selecting delete.",
+                "Unable to clear list because there are active downloads in progress.\n\n"
+                "You can stop or remove an individual download by right-clicking on it and selecting 'Delete'.",
             )
 
-        self.workers = {}
-        self.to_dl = {}
+        self.active_workers.clear()
+        self.pending_queue.clear()
+        self.to_dl.clear()
         self.tw.clear()
         self._update_queue_count()
 
     def button_download(self):
+        # If user has text in Single Video box, queue it first
         if self.te_link.toPlainText().strip():
             self.button_add()
 
-        if not self.to_dl:
+        # If on playlist tab and user typed a playlist link, fetch it
+        if hasattr(self, "tab_widget") and self.tab_widget.currentIndex() == 1:
+            if self.le_playlist.text().strip() and not self.to_dl and not self.active_workers:
+                return self.button_fetch_playlist()
+
+        if not self.to_dl and not self.active_workers and not self.pending_queue:
             return QtWidgets.QMessageBox.information(
                 self,
                 "Application Message",
-                "Unable to download because there are no links in the list.",
+                "Unable to download because there are no links in the queue.\n\n"
+                "Please add one or more video links or a playlist first.",
             )
 
-        for idx, worker in self.to_dl.items():
-            self.workers[idx] = worker
+        # Enqueue all unstarted workers
+        for idx in list(self.to_dl.keys()):
+            if idx not in self.pending_queue:
+                self.pending_queue.append(idx)
+
+        self._process_download_queue()
+
+    def _process_download_queue(self):
+        """Manage concurrency: keep up to MAX_CONCURRENT_DOWNLOADS running."""
+        while (
+            len(self.active_workers) < self.MAX_CONCURRENT_DOWNLOADS
+            and self.pending_queue
+        ):
+            idx = self.pending_queue.pop(0)
+            worker = self.to_dl.pop(idx, None)
+            if not worker:
+                continue
+
+            self.active_workers[idx] = worker
             worker.finished.connect(worker.deleteLater)
-            worker.finished.connect(lambda x=idx: self.workers.pop(x))
+            worker.finished.connect(lambda x=idx: self._on_worker_finished(x))
             worker.progress.connect(self.on_dl_progress)
             worker.start()
 
-        self.to_dl = {}
+    def _on_worker_finished(self, idx):
+        self.active_workers.pop(idx, None)
+        self._process_download_queue()
+        if not self.active_workers and not self.pending_queue:
+            self.statusBar.showMessage("All downloads completed!", 8000)
 
     def load_config(self):
         config_path = ROOT / "config.toml"
+        default_config = {
+            "general": {
+                "current_preset": 0,
+                "current_quality": 0,
+                "path": get_default_download_dir(),
+                "global_args": "",
+                "update_ytdlp": True,
+            },
+            "presets": {
+                "best": "-f bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+                "mp4": "-f bv*[vcodec^=avc]+ba[ext=m4a]/b",
+                "mp3": "--extract-audio --audio-format mp3 --audio-quality 0",
+            },
+        }
 
         try:
-            self.config = load_toml(config_path)
-        except Exception:
-            QtWidgets.QMessageBox.critical(
-                self,
-                "Application Message",
-                "Config file error.",
-            )
-            logger.error("Config file error.", exc_info=True)
-            QtWidgets.QApplication.exit()
+            if not config_path.exists():
+                save_toml(config_path, default_config)
+                self.config = default_config
+            else:
+                self.config = load_toml(config_path)
+        except Exception as e:
+            logger.error(f"Error loading config, using defaults: {e}", exc_info=True)
+            self.config = default_config
 
-        update_ytdlp = self.config["general"].get("update_ytdlp")
-        self.config["general"]["update_ytdlp"] = (
-            update_ytdlp if update_ytdlp else True
-        )
-        self.dd_preset.addItems(self.config["presets"].keys())
-        self.dd_preset.setCurrentIndex(
-            self.config["general"].get("current_preset", 0)
-        )
+        if "general" not in self.config:
+            self.config["general"] = default_config["general"]
+        if "presets" not in self.config:
+            self.config["presets"] = default_config["presets"]
 
+        update_ytdlp = self.config["general"].get("update_ytdlp", True)
+        self.config["general"]["update_ytdlp"] = bool(update_ytdlp)
+
+        self.dd_preset.clear()
+        self.dd_preset.addItems(list(self.config["presets"].keys()))
+        current_preset = self.config["general"].get("current_preset", 0)
+        if isinstance(current_preset, int) and 0 <= current_preset < self.dd_preset.count():
+            self.dd_preset.setCurrentIndex(current_preset)
+
+        self.dd_quality.clear()
         self.dd_quality.addItems(QUALITY_OPTIONS)
         current_quality = self.config["general"].get("current_quality", 0)
         if (
@@ -611,16 +677,30 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ):
             self.dd_quality.setCurrentIndex(current_quality)
 
-        self.le_path.setText(self.config["general"].get("path", ""))
+        saved_path = self.config["general"].get("path", "")
+        if not saved_path or not Path(saved_path).exists():
+            saved_path = get_default_download_dir()
+        self.le_path.setText(saved_path)
         self.on_preset_changed(self.dd_preset.currentText())
 
     def closeEvent(self, event):
-        self.config["general"]["current_preset"] = self.dd_preset.currentIndex()
-        self.config["general"]["current_quality"] = (
-            self.dd_quality.currentIndex()
-        )
-        self.config["general"]["path"] = self.le_path.text()
-        save_toml(ROOT / "config.toml", self.config)
+        # Stop active workers cleanly to avoid orphan subprocesses or Qt thread crashes
+        for worker in list(self.active_workers.values()):
+            if worker.isRunning():
+                worker.stop()
+                worker.wait(2000)
+
+        if hasattr(self, "dep_worker") and self.dep_worker.isRunning():
+            self.dep_worker.wait(3000)
+
+        try:
+            self.config["general"]["current_preset"] = self.dd_preset.currentIndex()
+            self.config["general"]["current_quality"] = self.dd_quality.currentIndex()
+            self.config["general"]["path"] = self.le_path.text()
+            save_toml(ROOT / "config.toml", self.config)
+        except Exception as e:
+            logger.error(f"Error saving config on close: {e}")
+
         event.accept()
 
     def on_dl_progress(self, item: QtWidgets.QTreeWidgetItem, emit_data):
@@ -657,11 +737,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 else:
                     pb = self.tw.itemWidget(item, index)
                     if pb:
-                        pb.setValue(round(float(update.replace("%", ""))))
-        except AttributeError:
-            logger.info(
-                f"Download ({item.data(0, ItemRoles.IdRole)}) no longer exists"
-            )
+                        try:
+                            clean_val = update.replace("%", "").strip()
+                            pb.setValue(round(float(clean_val)))
+                        except ValueError:
+                            pass
+        except (AttributeError, RuntimeError):
+            # Widget or item was already removed or destroyed
+            pass
 
 
 if __name__ == "__main__":

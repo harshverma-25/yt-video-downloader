@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Executable with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onedir --windowed `
+            --name "yt-video-downloader" `
+            --icon "app/assets/yt-video-downloader.ico" `
+            --add-data "app/assets;assets" `
+            --add-data "app/ui;ui" `
+            --add-data "app/config.toml;." `
+            app/app.py
+
+      - name: Package Release ZIP
+        shell: powershell
+        run: |
+          Compress-Archive -Path dist/yt-video-downloader/* -DestinationPath dist/yt-video-downloader-windows.zip
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-video-downloader-windows
+          path: dist/yt-video-downloader-windows.zip
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/yt-video-downloader-windows.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

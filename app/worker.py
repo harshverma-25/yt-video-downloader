@@ -4,8 +4,17 @@ import shlex
 import subprocess as sp
 import sys
 
+from pathlib import Path
 from PySide6 import QtCore, QtWidgets
-from utils import BIN_DIR, ROOT, ItemRoles, TreeColumn, get_ytdlp_path
+from utils import (
+    BIN_DIR,
+    LEGACY_BIN_DIR,
+    ROOT,
+    ItemRoles,
+    TreeColumn,
+    get_ytdlp_path,
+    get_ffmpeg_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +52,26 @@ class DownloadWorker(QtCore.QThread):
             "10M",
             "--no-mtime",
         ]
-        p_args = config["presets"][self.preset]
-        g_args = config["general"].get("global_args")
+
+        # Add FFmpeg location if available in local directories
+        ffmpeg_dir = get_ffmpeg_dir()
+        if ffmpeg_dir:
+            args += ["--ffmpeg-location", str(ffmpeg_dir)]
+
+        p_args = config["presets"].get(self.preset, "")
+        g_args = config["general"].get("global_args", "") or ""
 
         args += ["-P", self.path]
-        p_args_list = p_args if isinstance(p_args, list) else shlex.split(p_args)
+
+        if isinstance(p_args, list):
+            p_args_list = p_args
+        elif isinstance(p_args, str) and p_args.strip():
+            try:
+                p_args_list = shlex.split(p_args)
+            except ValueError:
+                p_args_list = p_args.split()
+        else:
+            p_args_list = []
         args += p_args_list
 
         if self.quality and self.quality not in ("Best", "N/A", "-"):
@@ -56,7 +80,14 @@ class DownloadWorker(QtCore.QThread):
                 height = self.quality.split("p")[0].strip()
                 args += ["-S", f"res:{height}"]
 
-        args += g_args if isinstance(g_args, list) else shlex.split(g_args)
+        if isinstance(g_args, list):
+            args += g_args
+        elif isinstance(g_args, str) and g_args.strip():
+            try:
+                args += shlex.split(g_args)
+            except ValueError:
+                args += g_args.split()
+
         args += ["--", self.link]
         return args
 
@@ -69,8 +100,22 @@ class DownloadWorker(QtCore.QThread):
         output = ""
         logger.info(f"Download ({self.id}) starting with cmd: {self.command}")
 
+        # Ensure destination directory exists
+        try:
+            Path(self.path).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Could not create download folder '{self.path}': {e}")
+
         env = os.environ.copy()
-        env["PATH"] = str(BIN_DIR) + os.pathsep + str(ROOT / "bin") + os.pathsep + env.get("PATH", "")
+        env["PATH"] = (
+            str(BIN_DIR)
+            + os.pathsep
+            + str(LEGACY_BIN_DIR)
+            + os.pathsep
+            + str(ROOT / "bin")
+            + os.pathsep
+            + env.get("PATH", "")
+        )
 
         self.progress.emit(self.item, [(TreeColumn.STATUS, "Processing")])
 
@@ -88,32 +133,46 @@ class DownloadWorker(QtCore.QThread):
                 with QtCore.QMutexLocker(self._mutex):
                     if self._stop:
                         p.terminate()
-                        p.wait()
-                        logger.info(f"Download ({self.id}) stopped.")
+                        try:
+                            p.wait(timeout=3)
+                        except sp.TimeoutExpired:
+                            p.kill()
+                        logger.info(f"Download ({self.id}) stopped by user.")
                         break
 
                 line = line.strip()
                 if "__SEP__" in line:
-                    status, total_bytes, percent, speed, eta, title = [
-                        i.strip() for i in line.split("__SEP__")
-                    ]
-                    self.progress.emit(
-                        self.item,
-                        [
-                            (TreeColumn.TITLE, title),
-                            (TreeColumn.SIZE, total_bytes),
-                            (TreeColumn.PROGRESS, percent),
-                            (TreeColumn.SPEED, speed),
-                            (TreeColumn.ETA, eta),
-                            (TreeColumn.STATUS, "Downloading"),
-                        ],
-                    )
-                elif line.startswith(("[Merger]", "[ExtractAudio]")):
+                    parts = [i.strip() for i in line.split("__SEP__")]
+                    if len(parts) >= 6:
+                        status = parts[0]
+                        total_bytes = parts[1]
+                        percent = parts[2]
+                        speed = parts[3]
+                        eta = parts[4]
+                        title = "__SEP__".join(parts[5:])
+                        self.progress.emit(
+                            self.item,
+                            [
+                                (TreeColumn.TITLE, title),
+                                (TreeColumn.SIZE, total_bytes),
+                                (TreeColumn.PROGRESS, percent),
+                                (TreeColumn.SPEED, speed),
+                                (TreeColumn.ETA, eta),
+                                (TreeColumn.STATUS, "Downloading"),
+                            ],
+                        )
+                elif line.startswith(("[Merger]", "[ExtractAudio]", "[VideoConvertor]")):
                     self.progress.emit(self.item, [(TreeColumn.STATUS, "Converting")])
                 elif line.startswith("WARNING:"):
                     logger.warning(f"Download ({self.id}) {line}")
 
-        if p.returncode != 0:
+        with QtCore.QMutexLocker(self._mutex):
+            was_stopped = self._stop
+
+        if was_stopped:
+            logger.info(f"Download ({self.id}) cancelled.")
+            self.progress.emit(self.item, [(TreeColumn.STATUS, "Cancelled")])
+        elif p.returncode != 0:
             logger.error(f"Download ({self.id}) returncode: {p.returncode}\n{output}")
             self.progress.emit(self.item, [(TreeColumn.STATUS, "ERROR")])
         else:

@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 import qtawesome as qta
 from PySide6 import QtCore, QtGui, QtWidgets
-from utils import BIN_DIR, ROOT, QUALITY_OPTIONS, get_ytdlp_path
+from utils import BIN_DIR, LEGACY_BIN_DIR, ROOT, QUALITY_OPTIONS, get_ytdlp_path
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +82,18 @@ class PlaylistFetchWorker(QtCore.QThread):
         if self._process:
             try:
                 self._process.terminate()
+                self._process.wait(timeout=2)
             except Exception:
-                pass
-        self.terminate()
+                try:
+                    self._process.kill()
+                except Exception:
+                    pass
 
     def run(self):
+        if not self.url:
+            self.error.emit("Please enter a valid YouTube playlist URL.")
+            return
+
         try:
             create_window = sp.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             ytdlp_exe = get_ytdlp_path()
@@ -104,6 +111,8 @@ class PlaylistFetchWorker(QtCore.QThread):
             env = os.environ.copy()
             env["PATH"] = (
                 str(BIN_DIR)
+                + os.pathsep
+                + str(LEGACY_BIN_DIR)
                 + os.pathsep
                 + str(ROOT / "bin")
                 + os.pathsep
@@ -169,7 +178,7 @@ class PlaylistDialog(QtWidgets.QDialog):
     def _normalize_entries(self):
         """Filter out unavailable videos and ensure clean title, url, duration."""
         for idx, entry in enumerate(self.raw_entries, 1):
-            if not entry:
+            if not isinstance(entry, dict):
                 continue
             title = entry.get("title") or f"Video #{idx}"
             if title.strip() in ("[Private video]", "[Deleted video]"):
@@ -504,7 +513,13 @@ class PlaylistDialog(QtWidgets.QDialog):
             self.table.setRowHidden(row, not match)
 
     def _on_download_all(self):
-        self._select_all()
+        self.table.blockSignals(True)
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item:
+                item.setCheckState(QtCore.Qt.CheckState.Checked)
+        self.table.blockSignals(False)
+        self._update_selection_counter()
         self.accept()
 
     def _on_download_selected(self):
